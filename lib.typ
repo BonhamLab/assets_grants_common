@@ -7,13 +7,13 @@
 //
 // Or with customization:
 //
-//   #show: nih-format.with(page: (margin: (all: 0.75in)))
+//   #show: nih-format.with(page-overrides: (margin: 0.75in))
 
 /// NIH page settings: US Letter, ½″ margins on all sides.
 /// Exported so callers can spread/override individual fields.
 #let nih-page = (
   paper: "us-letter",
-  margin: (all: 0.5in),
+  margin: 0.5in,
 )
 
 /// NIH text settings: Liberation Serif, 11 pt (minimum per NIH guidelines).
@@ -27,16 +27,16 @@
 /// Apply NIH grant formatting to a document.
 ///
 /// Parameters:
-///   page  - dict of overrides merged into nih-page
-///   text  - dict of overrides merged into nih-text
-///   doc   - document content (pass implicitly via #show: nih-format)
+///   page-overrides  - dict of overrides merged into nih-page
+///   text-overrides  - dict of overrides merged into nih-text
+///   doc             - document content (pass implicitly via #show: nih-format)
 ///
 /// Example:
 ///   #show: nih-format
-///   #show: nih-format.with(text: (size: 12pt))
-#let nih-format(page: (:), text: (:), doc) = {
-  set page(..nih-page, ..page)
-  set text(..nih-text, ..text)
+///   #show: nih-format.with(text-overrides: (size: 12pt))
+#let nih-format(page-overrides: (:), text-overrides: (:), doc) = {
+  set page(..nih-page, ..page-overrides)
+  set text(..nih-text, ..text-overrides)
   set par(
     justify: true,
     leading: 0.65em,

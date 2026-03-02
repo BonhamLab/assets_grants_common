@@ -43,8 +43,8 @@ Pass `page:` or `text:` dicts to override specific fields:
 
 ```typst
 #show: nih-format.with(
-  page: (margin: (all: 0.75in)),
-  text: (size: 12pt),
+  page-overrides: (margin: 0.75in),
+  text-overrides: (size: 12pt),
 )
 ```
 
