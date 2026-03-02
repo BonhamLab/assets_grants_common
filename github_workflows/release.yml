@@ -1,0 +1,269 @@
+name: Build and Release Grant
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:  # Allow manual triggering for testing
+
+permissions:
+  contents: write  # Required for uploading release assets
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+    ####################
+    # Repository Setup #
+    ####################
+
+    - name: Checkout repository with all submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'          # Checks out assets/grants_common and any other submodules
+        fetch-depth: 0                   # Full history for proper archiving
+        token: ${{ secrets.GITHUB_TOKEN }} # Use PAT for private submodules: ${{ secrets.SUBMODULE_PAT }}
+        clean: true                      # Clean working directory
+
+    - name: Validate submodule checkout
+      run: |
+        echo "=== Submodule Status ==="
+        git submodule status --recursive
+
+        echo "=== Checking submodule content ==="
+        git submodule foreach --recursive 'echo "Submodule $displaypath:" && ls -la . | head -5'
+
+        echo "✓ Submodule validation completed"
+
+    ######################
+    # Typst Environment  #
+    ######################
+
+    - name: Install Liberation Serif font
+      run: |
+        echo "=== Installing Liberation Serif ==="
+        sudo apt-get update -qq
+        sudo apt-get install -y fonts-liberation
+        fc-cache -fv
+        echo "=== Installed Liberation fonts ==="
+        fc-list | grep -i liberation
+        echo "✓ Liberation Serif installation completed"
+
+    - name: Cache Typst packages
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/typst
+          ~/.local/share/typst
+        key: typst-${{ runner.os }}-${{ hashFiles('**/*.typ') }}
+        restore-keys: |
+          typst-${{ runner.os }}-
+
+    - name: Setup Typst
+      uses: typst-community/setup-typst@v4
+      with:
+        typst-version: '0.13.1'  # Pin specific version for reproducibility
+        cache-dependency-path: 'main.typ'
+
+    - name: Verify Typst installation
+      run: |
+        echo "=== Typst Version ==="
+        typst --version
+
+        echo "=== Available Fonts (Liberation) ==="
+        typst fonts | grep -i liberation
+
+        echo "✓ Typst installation verified"
+
+    ##############
+    # Build      #
+    ##############
+
+    - name: Compile grant
+      run: |
+        echo "=== Starting Typst compilation ==="
+
+        # --root . is required so that absolute imports (e.g. /assets/grants_common/lib.typ) resolve correctly
+        if typst compile \
+          --root . \
+          --diagnostic-format short \
+          main.typ grant.pdf; then
+
+          echo "✓ Compilation successful"
+
+          if [ -f "grant.pdf" ]; then
+            size=$(stat -c%s grant.pdf)
+            echo "✓ PDF generated: grant.pdf (${size} bytes)"
+
+            if [ "$size" -lt 10240 ]; then
+              echo "⚠️  Warning: PDF seems unusually small (${size} bytes)"
+            fi
+          else
+            echo "❌ Error: PDF was not generated"
+            exit 1
+          fi
+        else
+          echo "❌ Compilation failed"
+          echo "=== Debug Information ==="
+          ls -la
+          echo "main.typ exists:" && [ -f main.typ ] && echo "✓ Yes" || echo "❌ No"
+          echo "assets/grants_common exists:" && [ -d assets/grants_common ] && echo "✓ Yes" || echo "❌ No"
+          ls ~/.cache/typst/packages/ 2>/dev/null || echo "No cached packages"
+          exit 1
+        fi
+
+    - name: Validate PDF output
+      run: |
+        file grant.pdf
+        if command -v pdfinfo &> /dev/null; then
+          pdfinfo grant.pdf | head -10
+        fi
+        echo "✓ PDF validation completed"
+
+    ########################
+    # Create Release Assets#
+    ########################
+
+    - name: Create source archive
+      run: |
+        echo "=== Creating source archive with submodules ==="
+
+        REPO_NAME="${{ github.event.repository.name }}"
+
+        if [ -n "${{ github.ref_name }}" ] && [ "${{ github.ref_name }}" != "main" ]; then
+          ARCHIVE_NAME="${REPO_NAME}-${{ github.ref_name }}-source"
+        else
+          ARCHIVE_NAME="${REPO_NAME}-$(date +%Y%m%d-%H%M%S)-source"
+        fi
+
+        mkdir -p /tmp/archive-staging
+        ARCHIVE_PATH="/tmp/archive-staging/${ARCHIVE_NAME}.tar.gz"
+
+        tar --exclude='.git' \
+            --exclude='.github' \
+            --exclude='*.log' \
+            --exclude='*.tmp' \
+            --exclude='.DS_Store' \
+            --exclude='Thumbs.db' \
+            --exclude='grant.pdf' \
+            --exclude='*.tar.gz' \
+            -czf "${ARCHIVE_PATH}" .
+
+        mv "${ARCHIVE_PATH}" "./${ARCHIVE_NAME}.tar.gz"
+
+        if [ -f "${ARCHIVE_NAME}.tar.gz" ]; then
+          size=$(stat -c%s "${ARCHIVE_NAME}.tar.gz")
+          echo "✓ Archive created: ${ARCHIVE_NAME}.tar.gz (${size} bytes)"
+
+          if tar -tzf "${ARCHIVE_NAME}.tar.gz" > /dev/null; then
+            echo "✓ Archive integrity verified"
+          else
+            echo "❌ Archive integrity check failed"
+            exit 1
+          fi
+
+          echo "=== Archive Contents (sample) ==="
+          tar -tzf "${ARCHIVE_NAME}.tar.gz" | head -20
+          echo "Total files: $(tar -tzf "${ARCHIVE_NAME}.tar.gz" | wc -l)"
+        else
+          echo "❌ Failed to create archive"
+          exit 1
+        fi
+
+        rm -rf /tmp/archive-staging
+        echo "ARCHIVE_NAME=${ARCHIVE_NAME}" >> $GITHUB_ENV
+
+    - name: Prepare release artifacts
+      run: |
+        mkdir -p release-assets
+        cp grant.pdf "release-assets/"
+        cp "${ARCHIVE_NAME}.tar.gz" "release-assets/"
+        cd release-assets
+        sha256sum * > checksums.sha256
+        echo "=== Release Assets ==="
+        ls -la
+        cat checksums.sha256
+
+    - name: Generate release notes
+      run: |
+        TYPST_VERSION=$(typst --version)
+        BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        REPO_NAME="${{ github.event.repository.name }}"
+
+        cat > release-notes.md << EOF
+        # ${REPO_NAME} ${{ github.ref_name }}
+
+        ## Included Files
+
+        - **grant.pdf** — compiled grant document
+        - **${{ env.ARCHIVE_NAME }}.tar.gz** — complete source with all submodules
+        - **checksums.sha256** — SHA256 checksums for verification
+
+        ## Build Information
+
+        - **Typst Version**: ${TYPST_VERSION}
+        - **Build Date**: ${BUILD_DATE}
+        - **Repository**: ${{ github.repository }}
+        - **Commit**: ${{ github.sha }}
+
+        ## Verification
+
+            sha256sum -c checksums.sha256
+
+        ## Rebuilding from Source
+
+        1. Extract: \`tar -xzf ${{ env.ARCHIVE_NAME }}.tar.gz\`
+        2. Install Typst 0.13.1: https://github.com/typst/typst#installation
+        3. Install Liberation Serif: \`sudo apt-get install fonts-liberation\` (or distro equivalent)
+        4. Compile: \`typst compile --root . main.typ grant.pdf\`
+        EOF
+
+        echo "✓ Release notes generated"
+
+    ########################
+    # Upload to Release    #
+    ########################
+
+    - name: Upload release artifacts
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release-assets/grant.pdf
+          release-assets/${{ env.ARCHIVE_NAME }}.tar.gz
+          release-assets/checksums.sha256
+        name: "${{ github.event.repository.name }} ${{ github.ref_name }}"
+        body_path: release-notes.md
+        draft: false
+        prerelease: false
+        fail_on_unmatched_files: true
+        generate_release_notes: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    ########################
+    # Error Recovery       #
+    ########################
+
+    - name: Upload build artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-artifacts-${{ github.run_id }}
+        path: |
+          **/*.typ
+          **/*.log
+          grant.pdf
+          release-assets/
+        retention-days: 7
+
+    - name: Debug information on failure
+      if: failure()
+      run: |
+        echo "=== Build Failure Debug ==="
+        pwd
+        find . -type f \( -name "*.typ" -o -name "*.pdf" -o -name "*.log" -o -name "*.tar.gz" \) | head -20
+        git status
+        git submodule status --recursive
+        typst --version || echo "Typst not available"
+        env | grep -E "(TYPST|GITHUB)" | sort
+        uname -a && df -h && free -h

@@ -5,7 +5,7 @@ Shared Typst formatting assets for NIH-style grant documents. Intended to be use
 ## Adding as a submodule
 
 ```bash
-git submodule add <this-repo-url> assets/grants_common
+git submodule add git@github.com:BonhamLab/assets_grants_common assets/grants_common
 ```
 
 ## Usage
@@ -22,6 +22,12 @@ Compile with `--root .` so that absolute imports resolve from the project root:
 ```bash
 typst compile --root . main.typ grant.pdf
 typst watch --root . main.typ grant.pdf
+```
+
+To "export" a version that contains the current commit hash:
+
+```fish
+typst compile --root . main.typ ~/Downloads/(basename $PWD)-(git rev-parse --short HEAD).pdf
 ```
 
 ### Formatting applied
@@ -51,7 +57,24 @@ The exported dicts `nih-page` and `nih-text` can also be spread directly into `s
 #set text(..nih-text)
 ```
 
+## GitHub Actions workflow
+
+`github_workflows/release.yml` is a template workflow for consumer repos. Copy it into your repo:
+
+```bash
+cp assets/grants_common/github_workflows/release.yml .github/workflows/release.yml
+```
+
+The workflow triggers on GitHub release creation (or manually). It:
+1. Checks out all submodules recursively (including `assets/grants_common`)
+2. Installs Liberation Serif via `apt` and Typst 0.13.1
+3. Compiles `main.typ` → `grant.pdf` with `--root .`
+4. Creates a source archive (with all submodule contents) and SHA256 checksums
+5. Uploads `grant.pdf`, the source `.tar.gz`, and `checksums.sha256` to the GitHub release
+
+Release artifacts are named after the repository (e.g., `my-grant-v1.0.0-source.tar.gz`).
+
 ## Requirements
 
 - [Typst](https://typst.app/) 0.13.1
-- Liberation Serif font installed (available in most Linux distros via `liberation-fonts`)
+- Liberation Serif font installed (available in most Linux distros via `fonts-liberation`)
