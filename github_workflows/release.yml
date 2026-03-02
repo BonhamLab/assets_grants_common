@@ -62,7 +62,7 @@ jobs:
     - name: Setup Typst
       uses: typst-community/setup-typst@v4
       with:
-        typst-version: '0.13.1'  # Pin specific version for reproducibility
+        typst-version: '0.14'  # Pin specific version for reproducibility
         cache-dependency-path: 'main.typ'
 
     - name: Verify Typst installation
@@ -213,7 +213,7 @@ jobs:
         ## Rebuilding from Source
 
         1. Extract: \`tar -xzf ${{ env.ARCHIVE_NAME }}.tar.gz\`
-        2. Install Typst 0.13.1: https://github.com/typst/typst#installation
+        2. Install Typst 0.14: https://github.com/typst/typst#installation
         3. Install Liberation Serif: \`sudo apt-get install fonts-liberation\` (or distro equivalent)
         4. Compile: \`typst compile --root . main.typ grant.pdf\`
         EOF
