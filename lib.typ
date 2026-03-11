@@ -37,6 +37,7 @@
 #let nih-format(page-overrides: (:), text-overrides: (:), doc) = {
   set page(..nih-page, ..page-overrides)
   set text(..nih-text, ..text-overrides)
+  set underline(offset:0.1em)
   set par(
     justify: true,
     leading: 0.65em,
@@ -49,6 +50,7 @@
   show heading: set text(size: 11pt, weight: "regular", style: "italic")
   show heading.where(level: 1): set text(size: 11pt, weight: "bold", style: "normal")
   show heading.where(level: 2): set text(size: 11pt, weight: "bold", style: "italic")
+
 
   doc
 }
