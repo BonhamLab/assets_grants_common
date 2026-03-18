@@ -112,11 +112,21 @@ jobs:
           exit 1
         fi
 
+    - name: Compile aims standalone
+      run: |
+        echo "=== Compiling aims-standalone.typ ==="
+        typst compile \
+          --root . \
+          --diagnostic-format short \
+          aims-standalone.typ aims.pdf
+        echo "✓ aims.pdf generated ($(stat -c%s aims.pdf) bytes)"
+
     - name: Validate PDF output
       run: |
-        file grant.pdf
+        file grant.pdf aims.pdf
         if command -v pdfinfo &> /dev/null; then
           pdfinfo grant.pdf | head -10
+          pdfinfo aims.pdf | head -10
         fi
         echo "✓ PDF validation completed"
 
@@ -177,6 +187,7 @@ jobs:
       run: |
         mkdir -p release-assets
         cp grant.pdf "release-assets/"
+        cp aims.pdf "release-assets/"
         cp "${ARCHIVE_NAME}.tar.gz" "release-assets/"
         cd release-assets
         sha256sum * > checksums.sha256
@@ -195,7 +206,8 @@ jobs:
 
         ## Included Files
 
-        - **grant.pdf** — compiled grant document
+        - **grant.pdf** — full compiled grant document
+        - **aims.pdf** — Specific Aims standalone document
         - **${{ env.ARCHIVE_NAME }}.tar.gz** — complete source with all submodules
         - **checksums.sha256** — SHA256 checksums for verification
 
@@ -229,6 +241,7 @@ jobs:
       with:
         files: |
           release-assets/grant.pdf
+          release-assets/aims.pdf
           release-assets/${{ env.ARCHIVE_NAME }}.tar.gz
           release-assets/checksums.sha256
         name: "${{ github.event.repository.name }} ${{ github.ref_name }}"
