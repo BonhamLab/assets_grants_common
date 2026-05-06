@@ -14,6 +14,7 @@
 #let nih-page = (
   paper: "us-letter",
   margin: 0.5in,
+  numbering: "1"
 )
 
 /// NIH text settings: Liberation Serif, 11 pt (minimum per NIH guidelines).
