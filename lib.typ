@@ -49,8 +49,13 @@
   // Catch-all first (level 3+): italic only. Specific rules below override it.
   // Level 1: bold; level 2: bold italic; deeper: italic only.
   show heading: set text(size: 11pt, weight: "regular", style: "italic")
-  show heading.where(level: 1): set text(size: 11pt, weight: "bold", style: "normal")
-  show heading.where(level: 2): set text(size: 11pt, weight: "bold", style: "italic")
+  show heading.where(level: 1): set text(size: 13pt, weight: "bold", style: "normal")
+  show heading.where(level: 2): it=> {
+    set text(font: "Noto Serif", size: 11pt, weight: "bold", style: "normal")
+    smallcaps(it)
+  }
+  show heading.where(level: 3): set text(weight: "bold", style: "normal")
+  show heading.where(level: 4): underline
 
 
   doc
