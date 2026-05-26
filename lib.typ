@@ -51,7 +51,7 @@
   show heading: set text(size: 11pt, weight: "regular", style: "italic")
   show heading.where(level: 1): set text(size: 13pt, weight: "bold", style: "normal")
   show heading.where(level: 2): it=> {
-    set text(font: "Noto Serif", size: 11pt, weight: "bold", style: "normal")
+    set text(font: "Liberation Serif", size: 11pt, weight: "bold", style: "normal")
     smallcaps(it)
   }
   show heading.where(level: 3): set text(weight: "bold", style: "normal")
