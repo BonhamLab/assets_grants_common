@@ -20,10 +20,10 @@ jobs:
     - name: Checkout repository with all submodules
       uses: actions/checkout@v4
       with:
-        submodules: 'recursive'          # Checks out assets/grants_common and any other submodules
-        fetch-depth: 0                   # Full history for proper archiving
-        token: ${{ secrets.GITHUB_TOKEN }} # Use PAT for private submodules: ${{ secrets.SUBMODULE_PAT }}
-        clean: true                      # Clean working directory
+        submodules: 'recursive'
+        fetch-depth: 0
+        clean: true
+        token: ${{ secrets.SUBMODULE_PAT }}
 
     - name: Validate submodule checkout
       run: |
@@ -112,22 +112,32 @@ jobs:
           exit 1
         fi
 
-    - name: Compile aims standalone
+    - name: Compile standalone documents
       run: |
-        echo "=== Compiling aims-standalone.typ ==="
-        typst compile \
-          --root . \
-          --diagnostic-format short \
-          aims-standalone.typ aims.pdf
-        echo "✓ aims.pdf generated ($(stat -c%s aims.pdf) bytes)"
+        echo "=== Compiling standalone documents ==="
+        failed=0
+        for typ in *-standalone.typ; do
+          pdf="${typ%-standalone.typ}-standalone.pdf"
+          echo "Compiling ${typ} -> ${pdf}"
+          if typst compile --root . --diagnostic-format short "${typ}" "${pdf}"; then
+            size=$(stat -c%s "${pdf}")
+            echo "✓ ${pdf} (${size} bytes)"
+          else
+            echo "❌ Failed: ${typ}"
+            failed=1
+          fi
+        done
+        [ "$failed" -eq 0 ] || exit 1
 
     - name: Validate PDF output
       run: |
-        file grant.pdf aims.pdf
-        if command -v pdfinfo &> /dev/null; then
-          pdfinfo grant.pdf | head -10
-          pdfinfo aims.pdf | head -10
-        fi
+        for pdf in grant.pdf *-standalone.pdf; do
+          [ -f "$pdf" ] || continue
+          file "$pdf"
+          if command -v pdfinfo &> /dev/null; then
+            pdfinfo "$pdf" | grep -E "Pages|File size" || true
+          fi
+        done
         echo "✓ PDF validation completed"
 
     ########################
@@ -187,7 +197,9 @@ jobs:
       run: |
         mkdir -p release-assets
         cp grant.pdf "release-assets/"
-        cp aims.pdf "release-assets/"
+        for pdf in *-standalone.pdf; do
+          [ -f "$pdf" ] && cp "$pdf" "release-assets/"
+        done
         cp "${ARCHIVE_NAME}.tar.gz" "release-assets/"
         cd release-assets
         sha256sum * > checksums.sha256
@@ -206,8 +218,7 @@ jobs:
 
         ## Included Files
 
-        - **grant.pdf** — full compiled grant document
-        - **aims.pdf** — Specific Aims standalone document
+        - **grant.pdf** — compiled grant document
         - **${{ env.ARCHIVE_NAME }}.tar.gz** — complete source with all submodules
         - **checksums.sha256** — SHA256 checksums for verification
 
@@ -237,11 +248,12 @@ jobs:
     ########################
 
     - name: Upload release artifacts
+      if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
         files: |
           release-assets/grant.pdf
-          release-assets/aims.pdf
+          release-assets/*-standalone.pdf
           release-assets/${{ env.ARCHIVE_NAME }}.tar.gz
           release-assets/checksums.sha256
         name: "${{ github.event.repository.name }} ${{ github.ref_name }}"
